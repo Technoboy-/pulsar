@@ -465,7 +465,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                     return;
                 }
 
-                log.info("[{}] Created ledger {}", name, lh.getId());
+                log.warn("[{}] Created ledger {}", name, lh.getId());
                 STATE_UPDATER.set(this, State.LedgerOpened);
                 lastLedgerCreatedTimestamp = clock.millis();
                 currentLedger = lh;
@@ -481,7 +481,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                         break;
                     }
                 }
-
+                log.warn("ledgerName : {}, lastConfirmedEntry : {}", name, lastConfirmedEntry);
                 LedgerInfo info = LedgerInfo.newBuilder().setLedgerId(lh.getId()).setTimestamp(0).build();
                 ledgers.put(lh.getId(), info);
 
@@ -1406,7 +1406,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
             clearPendingAddEntries(status);
             lastLedgerCreationFailureTimestamp = clock.millis();
         } else {
-            log.info("[{}] Created new ledger {}", name, lh.getId());
+            log.warn("[{}] Created new ledger {}", name, lh.getId());
             ledgers.put(lh.getId(), LedgerInfo.newBuilder().setLedgerId(lh.getId()).setTimestamp(0).build());
             currentLedger = lh;
             currentLedgerEntries = 0;

@@ -64,6 +64,7 @@ public class MetaStoreImpl implements MetaStore {
                         try {
                             info = ManagedLedgerInfo.parseFrom(optResult.get().getValue());
                             info = updateMLInfoTimestamp(info);
+                            log.warn("ledgerName : {}, ManagedLedgerInfo : {}", ledgerName, info);
                             callback.operationComplete(info, optResult.get().getStat());
                         } catch (InvalidProtocolBufferException e) {
                             callback.operationFailed(getException(e));
@@ -100,7 +101,7 @@ public class MetaStoreImpl implements MetaStore {
         if (log.isDebugEnabled()) {
             log.debug("[{}] Updating metadata version={} with content={}", ledgerName, stat, mlInfo);
         }
-
+        log.warn("asyncUpdateLedgerIds, ledgerName : {}, anagedLedgerInfo : {}", ledgerName, mlInfo);
         byte[] serializedMlInfo = mlInfo.toByteArray(); // Binary format
         String path = PREFIX + ledgerName;
         store.put(path, serializedMlInfo, Optional.of(stat.getVersion()))
@@ -139,6 +140,7 @@ public class MetaStoreImpl implements MetaStore {
                     if (optRes.isPresent()) {
                         try {
                             ManagedCursorInfo info = ManagedCursorInfo.parseFrom(optRes.get().getValue());
+                            log.warn("asyncGetCursorInfo, ledgerName : {}, cursorName : {}, ManagedCursorInfo : {}", ledgerName, cursorName, info);
                             callback.operationComplete(info, optRes.get().getStat());
                         } catch (InvalidProtocolBufferException e) {
                             callback.operationFailed(getException(e));
