@@ -20,8 +20,11 @@ package org.apache.pulsar.client.impl.conf;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.google.common.collect.Sets;
+
+import java.net.InetSocketAddress;
 import java.time.Clock;
 import java.util.Set;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -95,7 +98,9 @@ public class ClientConfigurationData implements Serializable, Cloneable {
 
     private long memoryLimitBytes = 0;
 
-    /** proxyServiceUrl and proxyProtocol must be mutually inclusive **/
+    /**
+     * proxyServiceUrl and proxyProtocol must be mutually inclusive
+     **/
     private String proxyServiceUrl;
     private ProxyProtocol proxyProtocol;
 
@@ -104,6 +109,11 @@ public class ClientConfigurationData implements Serializable, Cloneable {
 
     @JsonIgnore
     private Clock clock = Clock.systemDefaultZone();
+
+    // socks5
+    private InetSocketAddress socks5ProxyAddress;
+    private String socks5ProxyUsername;
+    private String socks5ProxyPassword;
 
     public Authentication getAuthentication() {
         if (authentication == null) {

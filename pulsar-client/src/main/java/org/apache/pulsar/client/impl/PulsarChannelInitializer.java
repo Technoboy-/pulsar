@@ -24,6 +24,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
+import io.netty.handler.proxy.Socks5ProxyHandler;
 import org.apache.pulsar.client.api.AuthenticationDataProvider;
 import org.apache.pulsar.client.impl.conf.ClientConfigurationData;
 import org.apache.pulsar.client.util.ObjectCache;
@@ -51,6 +52,10 @@ public class PulsarChannelInitializer extends ChannelInitializer<SocketChannel> 
     private final boolean tlsEnabled;
     private final boolean tlsEnabledWithKeyStore;
 
+    private final InetSocketAddress socks5ProxyAddress;
+    private final String socks5ProxyUsername;
+    private final String socks5ProxyPassword;
+
     private final Supplier<SslContext> sslContextSupplier;
     private NettySSLContextAutoRefreshBuilder nettySSLContextAutoRefreshBuilder;
 
@@ -62,21 +67,24 @@ public class PulsarChannelInitializer extends ChannelInitializer<SocketChannel> 
         this.clientCnxSupplier = clientCnxSupplier;
         this.tlsEnabled = conf.isUseTls();
         this.tlsEnabledWithKeyStore = conf.isUseKeyStoreTls();
+        this.socks5ProxyAddress = conf.getSocks5ProxyAddress();
+        this.socks5ProxyUsername = conf.getSocks5ProxyUsername();
+        this.socks5ProxyPassword = conf.getSocks5ProxyPassword();
 
         if (tlsEnabled) {
             if (tlsEnabledWithKeyStore) {
                 AuthenticationDataProvider authData1 = conf.getAuthentication().getAuthData();
 
                 nettySSLContextAutoRefreshBuilder = new NettySSLContextAutoRefreshBuilder(
-                            conf.getSslProvider(),
-                            conf.isTlsAllowInsecureConnection(),
-                            conf.getTlsTrustStoreType(),
-                            conf.getTlsTrustStorePath(),
-                            conf.getTlsTrustStorePassword(),
-                            conf.getTlsCiphers(),
-                            conf.getTlsProtocols(),
-                            TLS_CERTIFICATE_CACHE_MILLIS,
-                            authData1);
+                        conf.getSslProvider(),
+                        conf.isTlsAllowInsecureConnection(),
+                        conf.getTlsTrustStoreType(),
+                        conf.getTlsTrustStorePath(),
+                        conf.getTlsTrustStorePassword(),
+                        conf.getTlsCiphers(),
+                        conf.getTlsProtocols(),
+                        TLS_CERTIFICATE_CACHE_MILLIS,
+                        authData1);
             }
 
             sslContextSupplier = new ObjectCache<SslContext>(() -> {
@@ -86,11 +94,11 @@ public class PulsarChannelInitializer extends ChannelInitializer<SocketChannel> 
                     if (authData.hasDataForTls()) {
                         return authData.getTlsTrustStoreStream() == null
                                 ? SecurityUtility.createNettySslContextForClient(conf.isTlsAllowInsecureConnection(),
-                                        conf.getTlsTrustCertsFilePath(),
-                                        authData.getTlsCertificates(), authData.getTlsPrivateKey())
+                                conf.getTlsTrustCertsFilePath(),
+                                authData.getTlsCertificates(), authData.getTlsPrivateKey())
                                 : SecurityUtility.createNettySslContextForClient(conf.isTlsAllowInsecureConnection(),
-                                        authData.getTlsTrustStoreStream(),
-                                        authData.getTlsCertificates(), authData.getTlsPrivateKey());
+                                authData.getTlsTrustStoreStream(),
+                                authData.getTlsCertificates(), authData.getTlsPrivateKey());
                     } else {
                         return SecurityUtility.createNettySslContextForClient(conf.isTlsAllowInsecureConnection(),
                                 conf.getTlsTrustCertsFilePath());
@@ -116,7 +124,7 @@ public class PulsarChannelInitializer extends ChannelInitializer<SocketChannel> 
         ch.pipeline().addLast("handler", clientCnxSupplier.get());
     }
 
-   /**
+    /**
      * Initialize TLS for a channel. Should be invoked before the channel is connected to the remote address.
      *
      * @param ch      the channel
@@ -136,7 +144,7 @@ public class PulsarChannelInitializer extends ChannelInitializer<SocketChannel> 
             try {
                 SslHandler handler = tlsEnabledWithKeyStore
                         ? new SslHandler(nettySSLContextAutoRefreshBuilder.get()
-                                .createSSLEngine(sniHost.getHostString(), sniHost.getPort()))
+                        .createSSLEngine(sniHost.getHostString(), sniHost.getPort()))
                         : sslContextSupplier.get().newHandler(ch.alloc(), sniHost.getHostString(), sniHost.getPort());
                 ch.pipeline().addFirst(TLS_HANDLER, handler);
                 initTlsFuture.complete(ch);
@@ -146,6 +154,31 @@ public class PulsarChannelInitializer extends ChannelInitializer<SocketChannel> 
         });
 
         return initTlsFuture;
+    }
+
+    /**
+     * Initialize Socks5 for a channel. Should be invoked before the channel is connected to the remote address.
+     *
+     * @param ch the channel
+     * @return a {@link CompletableFuture} that completes when the Socks5 is set up.
+     */
+    CompletableFuture<Channel> initSocks5IfConfig(Channel ch) {
+        CompletableFuture<Channel> initSocks5Future = new CompletableFuture<>();
+        if (socks5ProxyAddress != null) {
+            ch.eventLoop().execute(() -> {
+                try {
+                    Socks5ProxyHandler socks5ProxyHandler = new Socks5ProxyHandler(socks5ProxyAddress, socks5ProxyUsername, socks5ProxyPassword);
+                    ch.pipeline().addFirst(socks5ProxyHandler.protocol(), socks5ProxyHandler);
+                    initSocks5Future.complete(ch);
+                } catch (Throwable t) {
+                    initSocks5Future.completeExceptionally(t);
+                }
+            });
+        } else {
+            initSocks5Future.complete(ch);
+        }
+
+        return initSocks5Future;
     }
 }
 
