@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -18,52 +18,55 @@
  */
 package org.apache.pulsar.client.impl;
 
-import org.apache.pulsar.broker.service.BrokerTestBase;
+import org.apache.pulsar.PulsarStandaloneStarter;
 import org.apache.pulsar.client.admin.PulsarAdminException;
-import org.apache.pulsar.client.api.ClientBuilder;
 import org.apache.pulsar.client.api.Consumer;
 import org.apache.pulsar.client.api.Message;
 import org.apache.pulsar.client.api.Producer;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.SubscriptionType;
-import org.apache.pulsar.common.policies.data.TenantInfo;
 import org.apache.pulsar.socks5.Socks5Server;
 import org.apache.pulsar.socks5.config.Socks5Config;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.testng.internal.thread.ThreadTimeoutException;
 
 import java.net.InetSocketAddress;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.testng.Assert.assertEquals;
 
 @Test
-public class ClientWithSocks5ProxyTest extends BrokerTestBase {
+public class ClientWithSocks5ProxyTestBak {
+    private static final Logger log = LoggerFactory.getLogger(ClientWithSocks5ProxyTestBak.class);
 
     private Socks5Server server;
 
-    final String topicName = "persistent://public/default/socks5";
+    private PulsarStandaloneStarter standalone;
 
     @BeforeMethod
     public void setup() throws Exception {
-        baseSetup();
+        startSocks5Server();
+        startStandalone();
     }
 
-    protected void customizeNewPulsarClientBuilder(ClientBuilder clientBuilder) {
-        clientBuilder.socks5ProxyAddress(new InetSocketAddress("localhost", 11080))
-                .socks5ProxyUsername("socks5")
-                .socks5ProxyPassword("pulsar");
+    private void startStandalone() throws Exception {
+        String args[] = new String[]{"-c",
+                "./src/test/resources/configurations/pulsar_broker_socks5_standalone.conf",
+                "-nfw", "-nss"};
+        standalone = new PulsarStandaloneStarter(args);
+        standalone.start();
     }
 
-    private void startSocks5Server(boolean enableAuth) {
+    private void startSocks5Server() throws Exception {
+        CountDownLatch latch = new CountDownLatch(1);
         Socks5Config config = new Socks5Config();
         config.setPort(11080);
-        config.setEnableAuth(enableAuth);
+        config.setEnableAuth(true);
         server = new Socks5Server(config);
         Thread thread = new Thread(new Runnable() {
             @Override
@@ -72,43 +75,34 @@ public class ClientWithSocks5ProxyTest extends BrokerTestBase {
                     server.start();
                 } catch (Exception e) {
                     e.printStackTrace();
+                } finally {
+                    latch.countDown();
                 }
             }
         });
         thread.setDaemon(true);
         thread.start();
+        latch.await(3, TimeUnit.SECONDS);
     }
 
     @AfterMethod(alwaysRun = true)
     protected void cleanup() throws Exception {
-        internalCleanup();
+        standalone.close();
         server.shutdown();
     }
 
-    private void initData() throws PulsarAdminException {
-        //
-        admin.tenants().createTenant("public", new TenantInfo() {
-            @Override
-            public Set<String> getAdminRoles() {
-                return Collections.emptySet();
-            }
-
-            @Override
-            public Set<String> getAllowedClusters() {
-                Set<String> clusters = new HashSet<>();
-                clusters.add("test");
-                return clusters;
-            }
-        });
-        admin.namespaces().createNamespace("public/default");
-        admin.topics().createNonPartitionedTopic(topicName);
-    }
-
     @Test
-    public void testSendAndConsumer() throws PulsarClientException, PulsarAdminException {
-        startSocks5Server(true);
-        initData();
-        // init consumer
+    public void testSocks5() throws PulsarClientException, PulsarAdminException {
+        final String topicName = "persistent://public/default/socks5";
+
+        PulsarClient pulsarClient = PulsarClient.builder()
+                .serviceUrl("pulsar://localhost:6650")
+                .socks5ProxyAddress(new InetSocketAddress("localhost", 11080))
+                .socks5ProxyUsername("socks5")
+                .socks5ProxyPassword("pulsar")
+                .build();
+
+        //
         final String subscriptionName = "socks5-subscription";
         Consumer<byte[]> consumer = pulsarClient.newConsumer()
                 .topic(topicName)
@@ -116,14 +110,13 @@ public class ClientWithSocks5ProxyTest extends BrokerTestBase {
                 .subscriptionType(SubscriptionType.Shared)
                 .subscribe();
 
-        //init producer
         Producer<byte[]> producer = pulsarClient.newProducer()
                 .topic(topicName)
                 .create();
 
-        //
         String msg = "abc";
         producer.send(msg.getBytes());
+
         Message<byte[]> message = consumer.receive();
 
         assertEquals(new String(message.getData()), msg);
@@ -131,33 +124,18 @@ public class ClientWithSocks5ProxyTest extends BrokerTestBase {
         consumer.unsubscribe();
     }
 
-    @Test
-    public void testDisableAuth() throws PulsarClientException, PulsarAdminException {
-        startSocks5Server(false);
-        initData();
-        ClientBuilder clientBuilder = PulsarClient.builder()
-                .serviceUrl(pulsar.getBrokerServiceUrl())
-                .socks5ProxyAddress(new InetSocketAddress("localhost", 11080));
-        PulsarClient pulsarClient = replacePulsarClient(clientBuilder);
-        Producer<byte[]> producer = pulsarClient.newProducer()
-                .topic(topicName)
-                .create();
-        String msg = "abc";
-        producer.send(msg.getBytes());
-    }
-
-    @Test(timeOut = 5000, expectedExceptions = {ThreadTimeoutException.class})
-    public void testWithErrorPassword() throws PulsarClientException, PulsarAdminException {
-        startSocks5Server(true);
-        initData();
-        ClientBuilder clientBuilder = PulsarClient.builder()
-                .serviceUrl(pulsar.getBrokerServiceUrl())
+    @Test(timeOut = 10000)
+    public void testSocks5WithErrorPassword() throws PulsarClientException {
+        final String topicName = "persistent://public/default/socks5";
+        PulsarClient pulsarClient = PulsarClient.builder()
+                .serviceUrl("pulsar://localhost:6650")
                 .socks5ProxyAddress(new InetSocketAddress("localhost", 11080))
                 .socks5ProxyUsername("socks5")
-                .socks5ProxyPassword("error-password");
-        PulsarClient pulsarClient = replacePulsarClient(clientBuilder);
+                .socks5ProxyPassword("pulsar123")
+                .build();
         pulsarClient.newProducer()
                 .topic(topicName)
                 .create();
+
     }
 }

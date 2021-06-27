@@ -84,12 +84,4 @@ public class Socks5Server {
 		boss.shutdownGracefully();
 		worker.shutdownGracefully();
 	}
-
-	public static void main(String[] args) throws Exception {
-		Socks5Config config = new Socks5Config();
-		config.setPort(11080);
-		config.setEnableAuth(true);
-		Socks5Server server = new Socks5Server(config);
-		server.start();
-	}
 }
