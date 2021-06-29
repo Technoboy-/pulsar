@@ -18,8 +18,9 @@
  */
 package org.apache.pulsar.broker.loadbalance.impl;
 
-import static org.apache.pulsar.broker.loadbalance.impl.LoadManagerShared.LOAD_REPORT_UPDATE_MIMIMUM_INTERVAL;
+import static org.apache.pulsar.broker.loadbalance.impl.LoadManagerShared.LOAD_REPORT_UPDATE_MINIMUM_INTERVAL;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -42,6 +43,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -181,6 +183,8 @@ public class SimpleLoadManagerImpl implements LoadManager, Consumer<Notification
     // check if given broker can load persistent/non-persistent topic
     private final BrokerTopicLoadingPredicate brokerTopicLoadingPredicate;
 
+    private volatile Future<?> updateRanking;
+
     // Perform initializations which may be done without a PulsarService.
     public SimpleLoadManagerImpl() {
         scheduler = Executors.newSingleThreadScheduledExecutor(
@@ -319,7 +323,7 @@ public class SimpleLoadManagerImpl implements LoadManager, Consumer<Notification
     private double getDynamicConfigurationDouble(String path, String settingName, double defaultValue) {
         double result = defaultValue;
         try {
-            String setting = this.getDynamicConfigurationFromStore(path, settingName, null);
+            String setting = this.getDynamicConfigurationFromStore(path, settingName, String.valueOf(defaultValue));
             if (setting != null) {
                 result = Double.parseDouble(setting);
             }
@@ -332,7 +336,7 @@ public class SimpleLoadManagerImpl implements LoadManager, Consumer<Notification
     private boolean getDynamicConfigurationBoolean(String path, String settingName, boolean defaultValue) {
         boolean result = defaultValue;
         try {
-            String setting = this.getDynamicConfigurationFromStore(path, settingName, null);
+            String setting = this.getDynamicConfigurationFromStore(path, settingName, String.valueOf(defaultValue));
             if (setting != null) {
                 result = Boolean.parseBoolean(setting);
             }
@@ -721,13 +725,13 @@ public class SimpleLoadManagerImpl implements LoadManager, Consumer<Notification
      * high value (like 80) for pure optimum distribution;
      *
      * Strategy to select broker: 1) The first choice is the least loaded broker which is underload but not idle; 2) The
-     * second choice is idle broker (if there is any); 3) Othewise simply select the least loaded broker if it is NOT
+     * second choice is idle broker (if there is any); 3) Otherwise simply select the least loaded broker if it is NOT
      * overloaded; 4) If all brokers are overloaded, select the broker with maximum available capacity (considering
      * brokers could have different hardware configuration, this usually means to select the broker with more hardware
      * resource);
      *
      * Broker's load level: 1) Load ranking (triggered by LoadReport update) estimate the load level according to the
-     * resourse usage and namespace bundles already loaded by each broker; 2) When leader broker decide the owner for a
+     * resource usage and namespace bundles already loaded by each broker; 2) When leader broker decide the owner for a
      * new namespace bundle, it may take time for the real owner to actually load the bundle and refresh LoadReport,
      * leader broker will store the bundle in a list called preAllocatedBundles, and the quota of all
      * preAllocatedBundles in preAllocatedQuotas, and re-estimate the broker's load level by putting the
@@ -962,8 +966,13 @@ public class SimpleLoadManagerImpl implements LoadManager, Consumer<Notification
                 log.debug("Received updated load report from broker node - [{}], scheduling re-ranking of brokers.",
                         n.getPath());
             }
-            scheduler.submit(this::updateRanking);
+            updateRanking = scheduler.submit(this::updateRanking);
         }
+    }
+
+    @VisibleForTesting
+    Future<?> getUpdateRanking(){
+        return updateRanking;
     }
 
     private void updateRanking() {
@@ -1133,7 +1142,7 @@ public class SimpleLoadManagerImpl implements LoadManager, Consumer<Notification
         if (this.avgJvmHeapUsageMBytes <= 0) {
             this.avgJvmHeapUsageMBytes = realtimeJvmHeapUsage;
         } else {
-            long weight = Math.max(1, TimeUnit.SECONDS.toMillis(120) / LOAD_REPORT_UPDATE_MIMIMUM_INTERVAL);
+            long weight = Math.max(1, TimeUnit.SECONDS.toMillis(120) / LOAD_REPORT_UPDATE_MINIMUM_INTERVAL);
             this.avgJvmHeapUsageMBytes = ((weight - 1) * this.avgJvmHeapUsageMBytes + realtimeJvmHeapUsage) / weight;
         }
 
@@ -1152,7 +1161,7 @@ public class SimpleLoadManagerImpl implements LoadManager, Consumer<Notification
             int maxUpdateIntervalInMinutes = pulsar.getConfiguration().getLoadBalancerReportUpdateMaxIntervalMinutes();
             if (timeElapsedSinceLastReport > TimeUnit.MINUTES.toMillis(maxUpdateIntervalInMinutes)) {
                 needUpdate = true;
-            } else if (timeElapsedSinceLastReport > LOAD_REPORT_UPDATE_MIMIMUM_INTERVAL) {
+            } else if (timeElapsedSinceLastReport > LOAD_REPORT_UPDATE_MINIMUM_INTERVAL) {
                 // check number of bundles assigned, comparing with last LoadReport
                 long oldBundleCount = lastLoadReport.getNumBundles();
                 long newBundleCount = pulsar.getBrokerService().getNumberOfNamespaceBundles();
@@ -1224,7 +1233,7 @@ public class SimpleLoadManagerImpl implements LoadManager, Consumer<Notification
      */
     private boolean isLoadReportGenerationIntervalPassed() {
         long timeSinceLastGenMillis = System.currentTimeMillis() - lastLoadReport.getTimestamp();
-        return timeSinceLastGenMillis > LOAD_REPORT_UPDATE_MIMIMUM_INTERVAL;
+        return timeSinceLastGenMillis > LOAD_REPORT_UPDATE_MINIMUM_INTERVAL;
     }
 
     // todo: changeme: this can be optimized, we don't have to iterate through everytime
