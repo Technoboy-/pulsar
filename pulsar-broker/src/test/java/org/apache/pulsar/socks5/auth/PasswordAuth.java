@@ -22,4 +22,5 @@ public interface PasswordAuth {
 
 	boolean auth(String username, String password);
 
+
 }
