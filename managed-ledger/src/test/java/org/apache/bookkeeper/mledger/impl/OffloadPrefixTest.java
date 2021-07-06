@@ -40,6 +40,7 @@ import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.client.api.ReadHandle;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.OffloadCallback;
 import org.apache.bookkeeper.mledger.LedgerOffloader;
+import org.apache.bookkeeper.mledger.LedgerOffloaderMXBean;
 import org.apache.bookkeeper.mledger.ManagedCursor;
 import org.apache.bookkeeper.mledger.ManagedLedgerConfig;
 import org.apache.bookkeeper.mledger.ManagedLedgerException;
@@ -1041,11 +1042,18 @@ public class OffloadPrefixTest extends MockedBookKeeperTestCase {
                 promise.completeExceptionally(new Exception("Not found"));
             }
             return promise;
-        };
+        }
+
+        ;
 
         @Override
         public OffloadPoliciesImpl getOffloadPolicies() {
             return offloadPolicies;
+        }
+
+        @Override
+        public LedgerOffloaderMXBean getStats() {
+            return null;
         }
 
         @Override
