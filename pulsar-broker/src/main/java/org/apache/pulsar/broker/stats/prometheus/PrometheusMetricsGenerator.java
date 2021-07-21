@@ -39,7 +39,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.bookkeeper.mledger.LedgerOffloader;
@@ -53,7 +52,6 @@ import org.apache.pulsar.broker.stats.metrics.LedgerOffloaderMetrics;
 import org.apache.pulsar.broker.stats.metrics.ManagedCursorMetrics;
 import org.apache.pulsar.broker.stats.metrics.ManagedLedgerCacheMetrics;
 import org.apache.pulsar.broker.stats.metrics.ManagedLedgerMetrics;
-import org.apache.pulsar.common.naming.NamespaceName;
 import org.apache.pulsar.common.naming.TopicDomain;
 import org.apache.pulsar.common.naming.TopicName;
 import org.apache.pulsar.common.stats.Metrics;
@@ -139,18 +137,19 @@ public class PrometheusMetricsGenerator {
     }
 
     private static void generateLedgerOffloaderMetrics(PulsarService pulsar, SimpleTextOutputStream stream) {
-        pulsar.getBrokerService().getTopics().keys().stream().filter(topic -> topic.startsWith(TopicDomain.persistent.value())).forEach(topic -> {
+        pulsar.getBrokerService().getTopics().keys().stream()
+                .filter(topic -> topic.startsWith(TopicDomain.persistent.value())).forEach(topic -> {
             try {
-                ManagedLedgerConfig managedLedgerConfig = pulsar.getBrokerService().getManagedLedgerConfig(TopicName.get(topic)).get();
+                ManagedLedgerConfig managedLedgerConfig = pulsar.getBrokerService()
+                        .getManagedLedgerConfig(TopicName.get(topic)).get();
                 LedgerOffloader ledgerOffloader = managedLedgerConfig.getLedgerOffloader();
                 if (ledgerOffloader != NullLedgerOffloader.INSTANCE && ledgerOffloader.getStats() != null) {
                     String clusterName = pulsar.getConfiguration().getClusterName();
                     List<Metrics> metrics = new LedgerOffloaderMetrics(pulsar, ledgerOffloader).generate();
-                    parseMetricsToPrometheusMetrics(metrics,
-                            clusterName, Collector.Type.GAUGE, stream);
+                    parseMetricsToPrometheusMetrics(metrics, clusterName, Collector.Type.GAUGE, stream);
                 }
             } catch (Exception ex) {
-                ex.printStackTrace();
+                log.error("generate ledger offloader metrics error", ex);
             }
         });
     }

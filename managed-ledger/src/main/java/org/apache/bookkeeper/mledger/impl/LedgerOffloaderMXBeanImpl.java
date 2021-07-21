@@ -59,7 +59,6 @@ public class LedgerOffloaderMXBeanImpl implements LedgerOffloaderMXBean {
 
     public LedgerOffloaderMXBeanImpl(String name, long refreshInterval) {
         this.name = name;
-        this.refreshInterval = refreshInterval;
         this.scheduler = Executors.newSingleThreadScheduledExecutor(
                 new DefaultThreadFactory("ledger-offloader-metrics"));
         this.scheduler.scheduleAtFixedRate(
@@ -67,21 +66,23 @@ public class LedgerOffloaderMXBeanImpl implements LedgerOffloaderMXBean {
     }
 
     public void refreshStats() {
-        offloadTimeMap.values().forEach(longAdder -> longAdder.reset());
-        offloadErrorMap.values().forEach(longAdder -> longAdder.reset());
+        offloadTimeMap.clear();
+        offloadErrorMap.clear();
 
-        readOffloadRateMap.values().forEach(rate -> rate.calculateRate((double) refreshInterval));
-        readOffloadErrorMap.values().forEach(longAdder -> longAdder.reset());
+        readOffloadRateMap.clear();
+        readOffloadErrorMap.clear();
 
-        writeToStorageBucketsMap.values().forEach(StatsBuckets::refresh);
-        writeToStorageRateMap.values().forEach(rate -> rate.calculateRate((double) refreshInterval));
-        writeToStorageErrorMap.values().forEach(longAdder -> longAdder.reset());
-        buildJcloundIndexBucketsMap.values().forEach(StatsBuckets::refresh);
-        buildJcloundIndexErrorMap.values().forEach(longAdder -> longAdder.reset());
+        writeToStorageBucketsMap.clear();
+        writeToStorageRateMap.clear();
+        writeToStorageErrorMap.clear();
+        buildJcloundIndexBucketsMap.clear();
+        buildJcloundIndexErrorMap.clear();
 
-        streamingWriteToStorageRateMap.values().forEach(rate -> rate.calculateRate((double) refreshInterval));
-        streamingWriteToStorageErrorMap.values().forEach(longAdder -> longAdder.reset());
+        streamingWriteToStorageRateMap.clear();
+        streamingWriteToStorageErrorMap.clear();
     }
+
+    //TODO metrics在namespace这个level的输出。
 
     @Override
     public String getName() {
