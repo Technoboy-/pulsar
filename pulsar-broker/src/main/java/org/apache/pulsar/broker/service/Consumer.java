@@ -789,7 +789,7 @@ public class Consumer {
                 long[] ackSet = ((PersistentSubscription) subscription).getCursor()
                         .getDeletedBatchIndexesAsLongArray(position);
                 if (ackSet != null) {
-                    batchSize -= BitSet.valueOf(ackSet).cardinality();
+                    batchSize = BitSet.valueOf(ackSet).cardinality();
                 }
                 pendingAcks.remove(position.getLedgerId(), position.getEntryId());
                 totalRedeliveryMessages += batchSize;
