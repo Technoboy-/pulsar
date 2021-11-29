@@ -393,7 +393,7 @@ public class Consumer {
                 }
                 position = PositionImpl.get(msgId.getLedgerId(), msgId.getEntryId(), ackSets);
                 long batchSize = pendingAcks.get(position.getLedgerId(), position.getEntryId()).first;
-                ackedCount = (int)(batchSize - BitSet.valueOf(ackSets).cardinality());
+                ackedCount = (int) (batchSize - BitSet.valueOf(ackSets).cardinality());
                 if (isTransactionEnabled()) {
                     //sync the batch position bit set point, in order to delete the position in pending acks
                     if (Subscription.isIndividualAckMode(subType)) {
@@ -451,7 +451,7 @@ public class Consumer {
                 }
                 position = PositionImpl.get(msgId.getLedgerId(), msgId.getEntryId(), acksSets);
                 long batchSize = pendingAcks.get(position.getLedgerId(), position.getEntryId()).first;
-                ackedCount = (int)(batchSize - BitSet.valueOf(acksSets).cardinality());
+                ackedCount = (int) (batchSize - BitSet.valueOf(acksSets).cardinality());
             } else {
                 position = PositionImpl.get(msgId.getLedgerId(), msgId.getEntryId());
             }
@@ -756,11 +756,6 @@ public class Consumer {
             List<PositionImpl> pendingPositions = new ArrayList<>((int) pendingAcks.size());
             MutableInt totalRedeliveryMessages = new MutableInt(0);
             pendingAcks.forEach((ledgerId, entryId, batchSize, stickyKeyHash) -> {
-                long[] ackSet = ((PersistentSubscription) subscription).getCursor()
-                        .getDeletedBatchIndexesAsLongArray(PositionImpl.get(ledgerId, entryId));
-                if(ackSet != null) {
-                    batchSize -= BitSet.valueOf(ackSet).cardinality();
-                }
                 totalRedeliveryMessages.add((int) batchSize);
                 pendingPositions.add(new PositionImpl(ledgerId, entryId));
             });
