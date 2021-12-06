@@ -235,6 +235,7 @@ public class Consumer {
             return writePromise;
         }
 
+        int unackedMessage = totalMessages;
         // Note
         // Must ensure that the message is written to the pendingAcks before sent is first , because this consumer
         // is possible to disconnect at this time.
@@ -244,6 +245,12 @@ public class Consumer {
                 if (entry != null) {
                     int batchSize = batchSizes.getBatchSize(i);
                     int stickyKeyHash = getStickyKeyHash(entry);
+                    long[] ackSet = ((PersistentSubscription) subscription).getCursor()
+                            .getDeletedBatchIndexesAsLongArray(
+                                    PositionImpl.get(entry.getLedgerId(), entry.getEntryId()));
+                    if (ackSet != null) {
+                        unackedMessage -= (batchSize - BitSet.valueOf(ackSet).cardinality());
+                    }
                     pendingAcks.put(entry.getLedgerId(), entry.getEntryId(), batchSize, stickyKeyHash);
                     if (log.isDebugEnabled()){
                         log.debug("[{}-{}] Added {}:{} ledger entry with batchSize of {} to pendingAcks in"
@@ -268,7 +275,7 @@ public class Consumer {
                             + " for consumerId: {}; avgMessagesPerEntry is {}",
                    topicName, subscription, ackedCount, totalMessages, consumerId, tmpAvgMessagesPerEntry);
         }
-        incrementUnackedMessages(totalMessages);
+        incrementUnackedMessages(unackedMessage);
         msgOut.recordMultipleEvents(totalMessages, totalBytes);
         msgOutCounter.add(totalMessages);
         bytesOutCounter.add(totalBytes);

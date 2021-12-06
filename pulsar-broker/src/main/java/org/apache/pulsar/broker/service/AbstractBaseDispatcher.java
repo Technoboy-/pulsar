@@ -206,7 +206,6 @@ public abstract class AbstractBaseDispatcher implements Dispatcher {
                         .getDeletedBatchIndexesAsLongArray(PositionImpl.get(entry.getLedgerId(), entry.getEntryId()));
                 if (ackSet != null) {
                     indexesAcks.setIndexesAcks(i, Pair.of(batchSize, ackSet));
-                    totalMessages -= (batchSize - BitSet.valueOf(ackSet).cardinality());
                 } else {
                     indexesAcks.setIndexesAcks(i, null);
                 }
