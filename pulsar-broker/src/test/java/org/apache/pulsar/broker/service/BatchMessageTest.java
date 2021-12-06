@@ -39,6 +39,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import lombok.SneakyThrows;
 import org.apache.pulsar.broker.service.persistent.PersistentDispatcherMultipleConsumers;
 import org.apache.pulsar.broker.service.persistent.PersistentTopic;
 import org.apache.pulsar.client.api.BatcherBuilder;
@@ -52,6 +53,7 @@ import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.SubscriptionType;
 import org.apache.pulsar.client.impl.ConsumerImpl;
 import org.apache.pulsar.common.util.FutureUtil;
+import org.awaitility.Awaitility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.Assert;
@@ -917,6 +919,61 @@ public class BatchMessageTest extends BrokerTestBase {
 
         producer.close();
         consumer1.close();
+    }
+
+    @Test
+    @SneakyThrows
+    public void testBatchMessageAck() {
+
+        int numMsgs = 200;
+        int batchMessages = 100;
+        final String topicName = "persistent://prop/ns-abc/batchMessageAck-" + UUID.randomUUID();
+
+        final String subscriptionName = "sub-batch-1";
+
+        ConsumerImpl<byte[]> consumer = (ConsumerImpl<byte[]>) pulsarClient
+                .newConsumer()
+                .topic(topicName)
+                .subscriptionName(subscriptionName)
+                .receiverQueueSize(50)
+                .subscriptionType(SubscriptionType.Shared)
+                .enableBatchIndexAcknowledgment(true)
+                .subscribe();
+
+        Producer<byte[]> producer = pulsarClient
+                .newProducer()
+                .topic(topicName)
+                .batchingMaxMessages(batchMessages)
+                .batchingMaxPublishDelay(1, TimeUnit.SECONDS)
+                .enableBatching(true)
+                .create();
+
+        List<CompletableFuture<MessageId>> sendFutureList = Lists.newArrayList();
+        for (int i = 0; i < numMsgs; i++) {
+            byte[] message = ("batch-message-" + i).getBytes();
+            sendFutureList.add(producer.newMessage().value(message).sendAsync());
+        }
+        FutureUtil.waitForAll(sendFutureList).get();
+        List<Integer> checkSize = Lists.newArrayList(10, 30, 90, 120, 160, 180);
+        PersistentTopic topic = (PersistentTopic) pulsar.getBrokerService().getTopicReference(topicName).get();
+        PersistentDispatcherMultipleConsumers dispatcher = (PersistentDispatcherMultipleConsumers) topic
+                .getSubscription(subscriptionName).getDispatcher();
+        int receivedMsg = 0;
+        while (receivedMsg < numMsgs) {
+            Message<byte[]> receive = consumer.receive();
+            consumer.acknowledge(receive);
+            ++receivedMsg;
+            if(checkSize.contains(receivedMsg)) {
+                final int recMsg = receivedMsg;
+                LOG.info("recMsg : {}", recMsg);
+                Awaitility.await().untilAsserted(() -> {
+                    assertEquals(dispatcher.getConsumers().get(0).getUnackedMessages(), 100 - recMsg);
+                });
+            }
+        }
+        Awaitility.await().untilAsserted(() -> {
+            assertEquals(dispatcher.getConsumers().get(0).getUnackedMessages(), 0);
+        });
     }
 
     private static final Logger LOG = LoggerFactory.getLogger(BatchMessageTest.class);

@@ -401,6 +401,7 @@ public class Consumer {
                 position = PositionImpl.get(msgId.getLedgerId(), msgId.getEntryId(), ackSets);
                 long batchSize = pendingAcks.get(position.getLedgerId(), position.getEntryId()).first;
                 ackedCount = (int) (batchSize - BitSet.valueOf(ackSets).cardinality());
+                log.info("ackedCount : {}", ackedCount);
                 if (isTransactionEnabled()) {
                     //sync the batch position bit set point, in order to delete the position in pending acks
                     if (Subscription.isIndividualAckMode(subType)) {
@@ -412,6 +413,7 @@ public class Consumer {
                 position = PositionImpl.get(msgId.getLedgerId(), msgId.getEntryId());
             }
             addAndGetUnAckedMsgs(this, -ackedCount);
+            log.info("unacked msg : {}", UNACKED_MESSAGES_UPDATER.get(this));
             positionsAcked.add(position);
 
             checkCanRemovePendingAcksAndHandle(position, msgId);
@@ -419,6 +421,16 @@ public class Consumer {
             checkAckValidationError(ack, position);
         }
         subscription.acknowledgeMessage(positionsAcked, AckType.Individual, properties);
+        for(Position position : positionsAcked) {
+            long[] ackSet = ((PersistentSubscription) subscription).getCursor()
+                    .getDeletedBatchIndexesAsLongArray((PositionImpl) position);
+            long batchSize = pendingAcks.get(position.getLedgerId(), position.getEntryId()).first;
+            long cursorUnackCount = 0;
+            if (ackSet != null) {
+                cursorUnackCount = (int) (batchSize - BitSet.valueOf(ackSet).cardinality());
+            }
+            log.info("cursor unacked msg : {}", cursorUnackCount);
+        }
         CompletableFuture<Void> completableFuture = new CompletableFuture<>();
         completableFuture.complete(null);
         if (isTransactionEnabled() && Subscription.isIndividualAckMode(subType)) {
