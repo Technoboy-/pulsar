@@ -1062,6 +1062,8 @@ public class ConsumerImpl<T> extends ConsumerBase<T> implements ConnectionHandle
 
             BatchMessageIdImpl batchMessageIdImpl = new BatchMessageIdImpl(messageId.getLedgerId(),
                     messageId.getEntryId(), getPartitionIndex(), index, numMessages, acker);
+            log.info("position : {}:{}, index : {}. acker : {} cardinality : {}", messageId.getLedgerId(),
+                    messageId.getEntryId(), index, acker, acker.getBitSet().cardinality());
 
             final ByteBuf payloadBuffer = (singleMessagePayload != null) ? singleMessagePayload : payload;
             final MessageImpl<U> message = MessageImpl.create(topicName.toString(), batchMessageIdImpl,

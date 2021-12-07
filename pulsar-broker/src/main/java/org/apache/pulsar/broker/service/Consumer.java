@@ -101,6 +101,8 @@ public class Consumer {
 
     private final ConcurrentLongLongPairHashMap pendingAcks;
 
+    private final ConcurrentLongLongPairHashMap batchAlreadyAcks;
+
     private final ConsumerStatsImpl stats;
 
     private volatile int maxUnackedMessages;
@@ -177,9 +179,11 @@ public class Consumer {
 
         if (Subscription.isIndividualAckMode(subType)) {
             this.pendingAcks = new ConcurrentLongLongPairHashMap(256, 1);
+            this.batchAlreadyAcks = new ConcurrentLongLongPairHashMap(256, 1);
         } else {
             // We don't need to keep track of pending acks if the subscription is not shared
             this.pendingAcks = null;
+            this.batchAlreadyAcks = null;
         }
 
         this.clientAddress = cnx.clientSourceAddress();
@@ -392,7 +396,12 @@ public class Consumer {
         for (int i = 0; i < ack.getMessageIdsCount(); i++) {
             int ackedCount = 1;
             MessageIdData msgId = ack.getMessageIdAt(i);
+            LongPair batchInfo = pendingAcks.get(msgId.getLedgerId(), msgId.getEntryId());
+            if (batchInfo != null) {
+                ackedCount = (int) batchInfo.first; //TODO 如果不是batch消息，first为多少.
+            }
             PositionImpl position;
+            log.info("position : {}:{}, msgId.getAckSetsCount() : {}",msgId.getLedgerId(), msgId.getEntryId(), msgId.getAckSetsCount());
             if (msgId.getAckSetsCount() > 0) {
                 long[] ackSets = new long[msgId.getAckSetsCount()];
                 for (int j = 0; j < msgId.getAckSetsCount(); j++) {
@@ -400,8 +409,15 @@ public class Consumer {
                 }
                 position = PositionImpl.get(msgId.getLedgerId(), msgId.getEntryId(), ackSets);
                 long batchSize = pendingAcks.get(position.getLedgerId(), position.getEntryId()).first;
-                ackedCount = (int) (batchSize - BitSet.valueOf(ackSets).cardinality());
-                log.info("ackedCount : {}", ackedCount);
+                LongPair alreadyAcked = batchAlreadyAcks.get(position.getLedgerId(), position.getEntryId());
+                long alreadyAckedCount = 0;
+                if (alreadyAcked != null) {
+                    alreadyAckedCount = alreadyAcked.first;
+                }
+                int totalAckedCount = (int) (batchSize - BitSet.valueOf(ackSets).cardinality());
+                ackedCount = (int) (totalAckedCount - alreadyAckedCount);
+                log.info("position : {}:{}, alreadyAckedCount : {}, totalAckedCount() : {}",msgId.getLedgerId(), msgId.getEntryId(), alreadyAckedCount, totalAckedCount);
+                batchAlreadyAcks.put(position.getLedgerId(), position.getEntryId(), totalAckedCount, 0);
                 if (isTransactionEnabled()) {
                     //sync the batch position bit set point, in order to delete the position in pending acks
                     if (Subscription.isIndividualAckMode(subType)) {
@@ -411,7 +427,18 @@ public class Consumer {
                 }
             } else {
                 position = PositionImpl.get(msgId.getLedgerId(), msgId.getEntryId());
+                long batchSize = pendingAcks.get(position.getLedgerId(), position.getEntryId()).first;
+                LongPair alreadyAcked = batchAlreadyAcks.get(position.getLedgerId(), position.getEntryId());
+                long alreadyAckedCount = 0;
+                if (alreadyAcked != null) {
+                    alreadyAckedCount = alreadyAcked.first;
+                }
+                log.info("batchSize : {}, alreadyAckedCount : {}", batchSize, alreadyAckedCount);
+                ackedCount = (int) (batchSize - alreadyAckedCount);
+                batchAlreadyAcks.put(position.getLedgerId(), position.getEntryId(), batchSize, 0);
             }
+
+            log.info("ackedCount : {}", ackedCount);
             addAndGetUnAckedMsgs(this, -ackedCount);
             log.info("unacked msg : {}", UNACKED_MESSAGES_UPDATER.get(this));
             positionsAcked.add(position);
@@ -421,16 +448,6 @@ public class Consumer {
             checkAckValidationError(ack, position);
         }
         subscription.acknowledgeMessage(positionsAcked, AckType.Individual, properties);
-        for(Position position : positionsAcked) {
-            long[] ackSet = ((PersistentSubscription) subscription).getCursor()
-                    .getDeletedBatchIndexesAsLongArray((PositionImpl) position);
-            long batchSize = pendingAcks.get(position.getLedgerId(), position.getEntryId()).first;
-            long cursorUnackCount = 0;
-            if (ackSet != null) {
-                cursorUnackCount = (int) (batchSize - BitSet.valueOf(ackSet).cardinality());
-            }
-            log.info("cursor unacked msg : {}", cursorUnackCount);
-        }
         CompletableFuture<Void> completableFuture = new CompletableFuture<>();
         completableFuture.complete(null);
         if (isTransactionEnabled() && Subscription.isIndividualAckMode(subType)) {
@@ -738,6 +755,7 @@ public class Consumer {
         if (ackedPosition != null) {
             if (!ackOwnedConsumer.getPendingAcks().remove(position.getLedgerId(), position.getEntryId())) {
                 // Message was already removed by the other consumer
+                ackOwnedConsumer.getBatchAlreadyAcks().remove(position.getLedgerId(), position.getEntryId());
                 return;
             }
             if (log.isDebugEnabled()) {
@@ -757,6 +775,10 @@ public class Consumer {
 
     public ConcurrentLongLongPairHashMap getPendingAcks() {
         return pendingAcks;
+    }
+
+    public ConcurrentLongLongPairHashMap getBatchAlreadyAcks() {
+        return batchAlreadyAcks;
     }
 
     public int getPriorityLevel() {
@@ -792,7 +814,7 @@ public class Consumer {
         flowConsumerBlockedPermits(this);
     }
 
-    public void redeliverUnacknowledgedMessages(List<MessageIdData> messageIds) {
+    public void redeliverUnacknowledgedMessages(List<MessageIdData> messageIds) { //1 - 100 msg.  ack - 20. unack = 100-20 .  ack - 10   redeliver = 80. unack= 0
         int totalRedeliveryMessages = 0;
         List<PositionImpl> pendingPositions = Lists.newArrayList();
         for (MessageIdData msg : messageIds) {
@@ -800,11 +822,11 @@ public class Consumer {
             LongPair longPair = pendingAcks.get(position.getLedgerId(), position.getEntryId());
             if (longPair != null) {
                 long batchSize = longPair.first;
-                long[] ackSet = ((PersistentSubscription) subscription).getCursor()
-                        .getDeletedBatchIndexesAsLongArray(position);
-                if (ackSet != null) {
-                    batchSize = BitSet.valueOf(ackSet).cardinality();
+                LongPair alreadyAcks = batchAlreadyAcks.get(position.getLedgerId(), position.getEntryId());
+                if (alreadyAcks != null) {
+                    batchSize = alreadyAcks.first;
                 }
+                log.info("redeliver position : {}:{}, batchSize : {}, ", position.getLedgerId(), position.getEntryId(), batchSize);
                 pendingAcks.remove(position.getLedgerId(), position.getEntryId());
                 totalRedeliveryMessages += batchSize;
                 pendingPositions.add(position);

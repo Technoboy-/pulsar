@@ -361,6 +361,7 @@ public class PersistentAcknowledgmentsGroupingTracker implements Acknowledgments
                     if (batchMessageId.getAcker() != null &&
                             !(batchMessageId.getAcker() instanceof BatchMessageAckerDisabled)) {
                         value = ConcurrentBitSetRecyclable.create(batchMessageId.getAcker().getBitSet());
+                        log.warn("ConcurrentBitSetRecyclable : {}", value.cardinality());
                     } else {
                         value = ConcurrentBitSetRecyclable.create();
                         value.set(0, batchMessageId.getBatchIndex());
@@ -533,6 +534,7 @@ public class PersistentAcknowledgmentsGroupingTracker implements Acknowledgments
             while (iterator.hasNext()) {
                 Map.Entry<MessageIdImpl, ConcurrentBitSetRecyclable> entry = iterator.next();
                 entriesToAck.add(Triple.of(entry.getKey().ledgerId, entry.getKey().entryId, entry.getValue()));
+                log.warn("pendingIndividualBatchIndexAcks cardinality : {}", entry.getValue().cardinality());
                 iterator.remove();
             }
         }
