@@ -204,12 +204,12 @@ public class HttpClient implements Closeable {
 
                     // request not success
                     if (response2.getStatusCode() != HttpURLConnection.HTTP_OK) {
-                        log.warn("[{}] HTTP get request failed: {}", requestUrl, response2.getStatusText());
+                        log.warn("[{}] HTTP get request failed: {}", requestUrl, response2.getResponseBody());
                         Exception e;
                         if (response2.getStatusCode() == HttpURLConnection.HTTP_NOT_FOUND) {
-                            e = new NotFoundException("Not found: " + response2.getStatusText());
+                            e = new NotFoundException("Not found: " + response2.getResponseBody());
                         } else {
-                            e = new PulsarClientException("HTTP get request failed: " + response2.getStatusText());
+                            e = new PulsarClientException("HTTP get request failed: " + response2.getResponseBody());
                         }
                         future.completeExceptionally(e);
                         return;
