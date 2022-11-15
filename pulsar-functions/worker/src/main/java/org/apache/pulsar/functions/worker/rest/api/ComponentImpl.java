@@ -513,6 +513,7 @@ public abstract class ComponentImpl implements Component<PulsarWorkerService> {
                         functionPackagePath, e);
             }
 
+
         }
 
         deleteStatestoreTableAsync(getStateNamespace(tenant, namespace), componentName);
