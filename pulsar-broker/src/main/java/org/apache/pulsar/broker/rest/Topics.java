@@ -45,6 +45,8 @@ import org.slf4j.LoggerFactory;
 public class Topics extends TopicsBase {
     private static final Logger log = LoggerFactory.getLogger(Topics.class);
 
+
+
     @POST
     @Path("/persistent/{tenant}/{namespace}/{topic}")
     @ApiOperation(value = "Produce message to a persistent topic.", response = String.class, responseContainer = "List")
