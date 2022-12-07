@@ -39,7 +39,6 @@ import org.slf4j.LoggerFactory;
 public class BundleSplitterTask implements BundleSplitStrategy {
     private static final Logger log = LoggerFactory.getLogger(BundleSplitStrategy.class);
     private final Set<String> bundleCache;
-
     private final Map<String, Integer> namespaceBundleCount;
 
 
