@@ -220,6 +220,7 @@ public class LinuxBrokerHostUsageImpl implements BrokerHostUsage {
             log.error("Failed to find NICs", e);
             return Collections.emptyList();
         }
+
     }
 
     public int getNicCount() {
