@@ -35,6 +35,8 @@ public class BundlesQuotas {
     // Default initial quota
     static final ResourceQuota INITIAL_QUOTA = new ResourceQuota();
 
+
+
     static {
         INITIAL_QUOTA.setMsgRateIn(40); // incoming msg / sec
         INITIAL_QUOTA.setMsgRateOut(120); // outgoing msg / sec
