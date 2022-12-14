@@ -34,6 +34,8 @@ public class MockTokenAuthenticationProvider implements AuthenticationProvider {
 
     public static final String KEY = "role";
 
+
+
     @Override
     public void initialize(ServiceConfiguration config) throws IOException {
         // No ops
