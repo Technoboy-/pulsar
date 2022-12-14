@@ -29,6 +29,7 @@ public class PulsarResourceDescription extends ResourceDescription {
     private Map<String, ResourceUsage> resourceUsageByName;
 
     public PulsarResourceDescription() {
+
         resourceUsageByName = new HashMap<String, ResourceUsage>();
     }
 
