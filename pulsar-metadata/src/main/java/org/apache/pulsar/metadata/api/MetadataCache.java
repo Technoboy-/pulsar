@@ -72,6 +72,8 @@ public interface MetadataCache<T> {
      */
     CompletableFuture<List<String>> getChildren(String path);
 
+
+
     /**
      * Read whether a specific path exists.
      *
