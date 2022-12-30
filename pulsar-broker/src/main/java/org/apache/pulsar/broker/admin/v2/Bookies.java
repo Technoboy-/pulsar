@@ -58,6 +58,7 @@ import org.apache.pulsar.common.policies.data.RawBookieInfo;
 public class Bookies extends AdminResource {
     private static final String PATH_SEPARATOR = "/";
 
+
     @GET
     @Path("/racks-info")
     @ApiOperation(value = "Gets the rack placement information for all the bookies in the cluster",
