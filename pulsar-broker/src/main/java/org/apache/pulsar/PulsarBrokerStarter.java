@@ -71,6 +71,7 @@ public class PulsarBrokerStarter {
             // it validates provided configuration is completed
             isComplete(config);
             return config;
+
         }
     }
 
