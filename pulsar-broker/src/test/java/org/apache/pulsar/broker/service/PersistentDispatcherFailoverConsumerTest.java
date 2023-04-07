@@ -313,6 +313,8 @@ public class PersistentDispatcherFailoverConsumerTest {
         pdfc.addConsumer(consumer);
         verify(consumer, times(1)).disconnect();
         assertEquals(0, pdfc.consumers.size());
+
+
     }
 
     @Test
