@@ -36,6 +36,8 @@ public class PulsarInitialNamespaceSetup {
         @Parameter(names = { "-c", "--cluster" }, description = "Cluster name", required = true)
         private String cluster;
 
+
+
         @Parameter(names = { "-cs",
                 "--configuration-store" }, description = "Configuration Store connection string", required = true)
         private String configurationStore;
