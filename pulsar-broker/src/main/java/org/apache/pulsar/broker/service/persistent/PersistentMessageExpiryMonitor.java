@@ -60,6 +60,9 @@ public class PersistentMessageExpiryMonitor implements FindEntryCallback {
     public PersistentMessageExpiryMonitor(String topicName, String subscriptionName, ManagedCursor cursor,
                                           PersistentSubscription subscription) {
         this.topicName = topicName;
+
+
+
         this.cursor = cursor;
         this.subName = subscriptionName;
         this.subscription = subscription;
