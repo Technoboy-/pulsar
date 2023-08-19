@@ -148,21 +148,25 @@ public class RawReaderImpl implements RawReader {
                             Commands.parseMessageMetadata(messageAndCnx.msg.getHeadersAndPayload());
                     numMsg = msgMetadata.getNumMessagesInBatch();
                 } catch (Throwable t) {
-                    // TODO message validation
+                    log.error("parseMessageMetadata error: {}", t);
                     numMsg = 1;
                 }
-                if (!future.complete(messageAndCnx.msg)) {
-                    messageAndCnx.msg.close();
-                    closeAsync();
-                }
-                MessageIdData messageId = messageAndCnx.msg.getMessageIdData();
-                lastDequeuedMessageId = new BatchMessageIdImpl(messageId.getLedgerId(), messageId.getEntryId(),
-                    messageId.getPartition(), numMsg - 1);
-                log.info("update lastDequeuedMessageId: {}, lastDequeuedMessageId");
+                try {
+                    if (!future.complete(messageAndCnx.msg)) {
+                        messageAndCnx.msg.close();
+                        closeAsync();
+                    }
+                    MessageIdData messageId = messageAndCnx.msg.getMessageIdData();
+                    lastDequeuedMessageId = new BatchMessageIdImpl(messageId.getLedgerId(), messageId.getEntryId(),
+                            messageId.getPartition(), numMsg - 1);
+                    log.info("update lastDequeuedMessageId: {}", lastDequeuedMessageId);
 
-                ClientCnx currentCnx = cnx();
-                if (currentCnx == messageAndCnx.cnx) {
-                    increaseAvailablePermits(currentCnx, numMsg);
+                    ClientCnx currentCnx = cnx();
+                    if (currentCnx == messageAndCnx.cnx) {
+                        increaseAvailablePermits(currentCnx, numMsg);
+                    }
+                } catch (Throwable t) {
+                    log.error("tryCompletePending error: {}", t);
                 }
             }
         }
