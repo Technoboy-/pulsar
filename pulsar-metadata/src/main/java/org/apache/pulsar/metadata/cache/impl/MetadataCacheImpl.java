@@ -218,18 +218,7 @@ public class MetadataCacheImpl<T> implements MetadataCache<T>, Consumer<Notifica
         CompletableFuture<Void> future = new CompletableFuture<>();
         store.put(path, content, Optional.of(-1L))
                 .thenAccept(stat -> {
-                    // Make sure we have the value cached before the operation is completed
-                    // In addition to caching the value, we need to add a watch on the path,
-                    // so when/if it changes on any other node, we are notified and we can
-                    // update the cache
-                    objCache.get(path).whenComplete((stat2, ex) -> {
-                        if (ex == null) {
-                            future.complete(null);
-                        } else {
-                            log.error("Exception while getting path {}", path, ex);
-                            future.completeExceptionally(ex.getCause());
-                        }
-                    });
+                    future.complete(null);
                 }).exceptionally(ex -> {
                     if (ex.getCause() instanceof BadVersionException) {
                         // Use already exists exception to provide more self-explanatory error message
@@ -266,7 +255,7 @@ public class MetadataCacheImpl<T> implements MetadataCache<T>, Consumer<Notifica
     @Override
     public void refresh(String path) {
         // Refresh object of path if only it is cached before.
-        objCache.asMap().computeIfPresent(path, (oldKey, oldValue) -> readValueFromStore(path));
+        objCache.asMap().compute(path, (oldKey, oldValue) -> readValueFromStore(path));
     }
 
     @VisibleForTesting
