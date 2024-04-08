@@ -27,8 +27,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+
 import lombok.Cleanup;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.bookkeeper.mledger.LedgerOffloader;
 import org.apache.bookkeeper.mledger.ManagedLedgerConfig;
 import org.apache.bookkeeper.mledger.impl.NullLedgerOffloader;
@@ -47,6 +50,7 @@ import org.apache.pulsar.client.api.Message;
 import org.apache.pulsar.client.api.MessageId;
 import org.apache.pulsar.client.api.Producer;
 import org.apache.pulsar.client.api.PulsarClient;
+import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.Schema;
 import org.apache.pulsar.client.api.SubscriptionInitialPosition;
 import org.apache.pulsar.client.api.SubscriptionType;
@@ -56,6 +60,8 @@ import org.apache.pulsar.common.naming.SystemTopicNames;
 import org.apache.pulsar.common.naming.TopicName;
 import org.apache.pulsar.common.naming.TopicVersion;
 import org.apache.pulsar.common.policies.data.BacklogQuota;
+import org.apache.pulsar.common.policies.data.PersistentTopicInternalStats;
+import org.apache.pulsar.common.policies.data.RetentionPolicies;
 import org.apache.pulsar.common.policies.data.TenantInfo;
 import org.apache.pulsar.common.policies.data.TenantInfoImpl;
 import org.apache.pulsar.common.policies.data.TopicPolicies;
@@ -69,6 +75,7 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 @Test(groups = "broker")
+@Slf4j
 public class PartitionedSystemTopicTest extends BrokerTestBase {
 
     static final int PARTITIONS = 5;
@@ -76,12 +83,8 @@ public class PartitionedSystemTopicTest extends BrokerTestBase {
     @BeforeMethod
     @Override
     protected void setup() throws Exception {
-        conf.setAllowAutoTopicCreation(false);
-        conf.setAllowAutoTopicCreationType(TopicType.PARTITIONED);
-        conf.setDefaultNumPartitions(PARTITIONS);
-        conf.setManagedLedgerMaxEntriesPerLedger(1);
-        conf.setBrokerDeleteInactiveTopicsEnabled(false);
-        conf.setTransactionCoordinatorEnabled(true);
+        conf.setManagedLedgerMaxEntriesPerLedger(2);
+        conf.setManagedLedgerMinLedgerRolloverTimeMinutes(0);
 
         super.baseSetup();
     }
@@ -365,5 +368,61 @@ public class PartitionedSystemTopicTest extends BrokerTestBase {
         String id = TopicName.get(base).getSchemaName();
         CompletableFuture<SchemaRegistry.SchemaAndMetadata> schema = pulsar.getSchemaRegistryService().getSchema(id);
         assertNull(schema.join());
+    }
+
+    @Test
+    public void testDeleteTopicSchemaAndPolicyWhenTopicIsNotLoaded2() throws Exception {
+        String ns = "public/default";
+        admin.tenants().createTenant("public", TenantInfo.builder().allowedClusters(Sets.newHashSet("test")).build());
+        admin.namespaces().createNamespace(ns);
+        admin.namespaces().setRetention(ns, new RetentionPolicies(0, 0));
+        admin.namespaces().setNamespaceMessageTTL(ns, 10);
+        final String topicName = "persistent://" + ns + "/testDeleteTopicSchemaAndPolicyWhenTopicIsNotLoaded";
+        admin.topics().createNonPartitionedTopic(topicName);
+        final Producer<String> producer = pulsarClient.newProducer(Schema.STRING).topic(topicName).create();
+        new Thread(() -> {
+            for (int i = 1; i <= 1_000; i ++) {
+                try {
+                    producer.send("test-" + i);
+                    Thread.sleep(100);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }).start();
+        final Consumer<String> consumer = pulsarClient.newConsumer(Schema.STRING).topic(topicName).subscriptionInitialPosition(SubscriptionInitialPosition.Earliest)
+                .subscriptionName("sub-1").subscribe();
+        new Thread(() -> {
+            try {
+                int count = 0;
+                final Message<String> receive = consumer.receive(5, TimeUnit.SECONDS);
+                if (receive != null) {
+                    consumer.acknowledge(receive);
+                    count++;
+                }
+                System.out.println("count : " + count);
+            } catch (Throwable ex) {
+                ex.printStackTrace();
+            }
+        }).start();
+        new Thread(() -> {
+            while(true) {
+                final PersistentTopicInternalStats internalStats;
+                try {
+                    internalStats = admin.topics().getInternalStats(topicName, false);
+                } catch (PulsarAdminException e) {
+                    throw new RuntimeException(e);
+                }
+                log.info("internal stat : {}", internalStats.cursors.get("sub-1"));
+                try {
+                    Thread.sleep(3000);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }).start();
+        admin.namespaces().setNamespaceMessageTTL(ns, 10);
+        CountDownLatch latch = new CountDownLatch(1);
+        latch.await();
     }
 }

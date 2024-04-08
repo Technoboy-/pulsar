@@ -18,6 +18,8 @@
  */
 package org.apache.pulsar.common.policies.data;
 
+import lombok.Data;
+
 import java.util.List;
 import java.util.Map;
 
@@ -82,6 +84,7 @@ public class ManagedLedgerInternalStats {
     /**
      * Pulsar cursor statistics.
      */
+    @Data
     public static class CursorStats {
         public String markDeletePosition;
         public String readPosition;
