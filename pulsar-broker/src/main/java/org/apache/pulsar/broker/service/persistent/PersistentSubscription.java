@@ -1173,6 +1173,7 @@ public class PersistentSubscription extends AbstractSubscription {
                 && backlog < MINIMUM_BACKLOG_FOR_EXPIRY_CHECK
                 && !topic.isOldestMessageExpired(cursor, messageTTLInSeconds))) {
             // don't do anything for almost caught-up connected subscriptions
+            log.info("ignore expireMessages, backlog : {}", backlog);
             return false;
         }
         this.lastExpireTimestamp = System.currentTimeMillis();

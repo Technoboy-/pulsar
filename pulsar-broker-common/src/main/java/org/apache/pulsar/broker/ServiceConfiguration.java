@@ -694,7 +694,7 @@ public class ServiceConfiguration implements PulsarConfiguration {
         minValue = 1,
         doc = "How frequently to proactively check and purge expired messages"
     )
-    private int messageExpiryCheckIntervalInMinutes = 5;
+    private int messageExpiryCheckIntervalInMinutes = 1;
     @FieldContext(
         category = CATEGORY_POLICIES,
         doc = "How long to delay rewinding cursor and dispatching messages when active consumer is changed"

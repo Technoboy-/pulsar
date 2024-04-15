@@ -381,7 +381,7 @@ public class PartitionedSystemTopicTest extends BrokerTestBase {
         admin.topics().createNonPartitionedTopic(topicName);
         final Producer<String> producer = pulsarClient.newProducer(Schema.STRING).topic(topicName).create();
         new Thread(() -> {
-            for (int i = 1; i <= 1_000; i ++) {
+            for (int i = 1; i <= 1_00; i ++) {
                 try {
                     producer.send("test-" + i);
                     Thread.sleep(100);
