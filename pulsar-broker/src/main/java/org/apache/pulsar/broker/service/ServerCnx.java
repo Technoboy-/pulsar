@@ -2833,7 +2833,7 @@ public class ServerCnx extends PulsarHandler implements TransportCnx {
                         .log("Reset subscription to message id");
                 commandSender.sendSuccessResponse(requestId);
             }).exceptionally(ex -> {
-                Throwable cause = FutureUtil.unwrapCompletionException(ex);
+                Throwable cause = unwrapCompletionExceptionOrReturnOriginal(ex);
                 log.warn()
                         .attr("subscription", subscription)
                         .exception(cause)
@@ -2855,7 +2855,7 @@ public class ServerCnx extends PulsarHandler implements TransportCnx {
                         .log("Reset subscription to publish time");
                 commandSender.sendSuccessResponse(requestId);
             }).exceptionally(ex -> {
-                Throwable cause = FutureUtil.unwrapCompletionException(ex);
+                Throwable cause = unwrapCompletionExceptionOrReturnOriginal(ex);
                 log.warn()
                         .attr("subscription", subscription)
                         .exception(cause)
@@ -2867,6 +2867,11 @@ public class ServerCnx extends PulsarHandler implements TransportCnx {
         } else {
             commandSender.sendErrorResponse(requestId, ServerError.MetadataError, "Consumer not found");
         }
+    }
+
+    private static Throwable unwrapCompletionExceptionOrReturnOriginal(Throwable throwable) {
+        Throwable cause = FutureUtil.unwrapCompletionException(throwable);
+        return cause != null ? cause : throwable;
     }
 
     private static String getExceptionMessage(Throwable throwable) {
