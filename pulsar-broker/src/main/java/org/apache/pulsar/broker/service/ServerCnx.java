@@ -2833,12 +2833,13 @@ public class ServerCnx extends PulsarHandler implements TransportCnx {
                         .log("Reset subscription to message id");
                 commandSender.sendSuccessResponse(requestId);
             }).exceptionally(ex -> {
+                Throwable cause = FutureUtil.unwrapCompletionException(ex);
                 log.warn()
                         .attr("subscription", subscription)
-                        .exception(ex)
+                        .exception(cause)
                         .log("Failed to reset subscription");
                 commandSender.sendErrorResponse(requestId, ServerError.UnknownError,
-                        "Error when resetting subscription: " + ex.getCause().getMessage());
+                        "Error when resetting subscription: " + getExceptionMessage(cause));
                 return null;
             });
         } else if (consumerCreated && seek.hasMessagePublishTime()){
@@ -2854,17 +2855,26 @@ public class ServerCnx extends PulsarHandler implements TransportCnx {
                         .log("Reset subscription to publish time");
                 commandSender.sendSuccessResponse(requestId);
             }).exceptionally(ex -> {
+                Throwable cause = FutureUtil.unwrapCompletionException(ex);
                 log.warn()
                         .attr("subscription", subscription)
-                        .exception(ex)
+                        .exception(cause)
                         .log("Failed to reset subscription");
                 commandSender.sendErrorResponse(requestId, ServerError.UnknownError,
-                        "Reset subscription to publish time error: " + ex.getCause().getMessage());
+                        "Reset subscription to publish time error: " + getExceptionMessage(cause));
                 return null;
             });
         } else {
             commandSender.sendErrorResponse(requestId, ServerError.MetadataError, "Consumer not found");
         }
+    }
+
+    private static String getExceptionMessage(Throwable throwable) {
+        if (throwable == null) {
+            return "unknown error";
+        }
+        String message = throwable.getMessage();
+        return message != null ? message : throwable.getClass().getName();
     }
 
     @Override
