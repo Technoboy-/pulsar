@@ -4178,6 +4178,17 @@ public class ManagedCursorTest extends MockedBookKeeperTestCase {
         assertEquals(cursor.getEstimatedSizeSinceMarkDeletePosition(), 10 * entryData.length);
     }
 
+    @Test
+    public void testEstimatedUnackedSizeWhenCursorIsAheadOfLastPosition() throws Exception {
+        ManagedLedger ledger = factory.open("test_estimated_unacked_size_cursor_ahead");
+        ManagedCursorImpl cursor = (ManagedCursorImpl) ledger.openCursor("c1");
+
+        Position lastPosition = ledger.addEntry("entry".getBytes(Encoding));
+        cursor.markDeletePosition = PositionFactory.create(lastPosition.getLedgerId() + 1, -1);
+
+        assertEquals(cursor.getEstimatedSizeSinceMarkDeletePosition(), 0);
+    }
+
     /**
      * Test that cursor.getEstimatedSizeSinceMarkDeletePosition() correctly accounts for individual
      * message deletions (asyncDelete/individual ack).
