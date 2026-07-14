@@ -1278,7 +1278,13 @@ public class ManagedCursorImpl implements ManagedCursor {
         Position markDeletePosition = this.markDeletePosition;
         Position lastPosition = ledger.getLastPosition();
         if (markDeletePosition == null || markDeletePosition.compareTo(lastPosition) >= 0) {
-            return 0;
+            if (markDeletePosition == null || !ledger.ledgerExists(markDeletePosition.getLedgerId())
+                    || isMarkDeletePositionOnEmptyCurrentLedger(markDeletePosition)) {
+                return 0;
+            }
+            throw new IllegalArgumentException(String.format(
+                    "Cursor %s mark-delete position %s is ahead of the last position %s for managed ledger %s",
+                    name, markDeletePosition, lastPosition, ledger.getName()));
         }
 
         long totalSize = ledger.estimateBacklogFromPosition(markDeletePosition);
@@ -1334,6 +1340,12 @@ public class ManagedCursorImpl implements ManagedCursor {
                 .log("Adjusted backlog size");
 
         return adjustedSize;
+    }
+
+    private boolean isMarkDeletePositionOnEmptyCurrentLedger(Position markDeletePosition) {
+        return ledger.currentLedger != null
+                && markDeletePosition.getLedgerId() == ledger.currentLedger.getId()
+                && ledger.currentLedgerEntries == 0;
     }
 
     private long getNumberOfEntriesInBacklog() {
