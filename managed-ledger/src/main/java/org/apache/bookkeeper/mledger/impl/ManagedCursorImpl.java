@@ -1278,7 +1278,7 @@ public class ManagedCursorImpl implements ManagedCursor {
         Position markDeletePosition = this.markDeletePosition;
         Position lastPosition = ledger.getLastPosition();
         if (markDeletePosition == null || markDeletePosition.compareTo(lastPosition) >= 0) {
-            if (!ledger.ledgerExists(lastPosition.getLedgerId())
+            if (markDeletePosition == null || !ledger.ledgerExists(lastPosition.getLedgerId())
                     || isMarkDeletePositionOnEmptyCurrentLedger(markDeletePosition)) {
                 return 0;
             }
