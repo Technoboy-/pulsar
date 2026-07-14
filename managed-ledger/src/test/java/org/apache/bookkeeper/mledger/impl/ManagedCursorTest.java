@@ -4179,14 +4179,42 @@ public class ManagedCursorTest extends MockedBookKeeperTestCase {
     }
 
     @Test
-    public void testEstimatedUnackedSizeWhenCursorIsAheadOfLastPosition() throws Exception {
-        ManagedLedger ledger = factory.open("test_estimated_unacked_size_cursor_ahead");
+    public void testEstimatedUnackedSizeWhenLatestLedgerIsEmpty() throws Exception {
+        ManagedLedger ledger = factory.open("test_estimated_unacked_size_empty_latest_ledger");
+        ManagedCursor cursor = ledger.openCursor("c1");
+
+        assertEquals(cursor.getEstimatedSizeSinceMarkDeletePosition(), 0);
+    }
+
+    @Test
+    public void testEstimatedUnackedSizeWhenCursorLedgerIsNoLongerInLedgerList() throws Exception {
+        ManagedLedger ledger = factory.open("test_estimated_unacked_size_cursor_ledger_removed");
         ManagedCursorImpl cursor = (ManagedCursorImpl) ledger.openCursor("c1");
 
         Position lastPosition = ledger.addEntry("entry".getBytes(Encoding));
         cursor.markDeletePosition = PositionFactory.create(lastPosition.getLedgerId() + 1, -1);
 
         assertEquals(cursor.getEstimatedSizeSinceMarkDeletePosition(), 0);
+    }
+
+    @Test
+    public void testEstimatedUnackedSizeFailsWhenCursorIsUnexpectedlyAheadOfLastPosition() {
+        ManagedLedgerImpl ledger = mock(ManagedLedgerImpl.class);
+        when(ledger.getName()).thenReturn("test_estimated_unacked_size_unexpected_position");
+        when(ledger.getConfig()).thenReturn(new ManagedLedgerConfig());
+        when(ledger.getLogger()).thenReturn(log);
+
+        Position lastPosition = PositionFactory.create(1, 10);
+        Position markDeletePosition = PositionFactory.create(2, -1);
+        when(ledger.getLastPosition()).thenReturn(lastPosition);
+        when(ledger.ledgerExists(markDeletePosition.getLedgerId())).thenReturn(true);
+
+        ManagedCursorImpl cursor = new ManagedCursorImpl(mock(BookKeeper.class), ledger, "c1");
+        cursor.markDeletePosition = markDeletePosition;
+
+        IllegalStateException exception = Assert.expectThrows(IllegalStateException.class,
+                cursor::getEstimatedSizeSinceMarkDeletePosition);
+        assertTrue(exception.getMessage().contains("is ahead of the last position"));
     }
 
     /**
