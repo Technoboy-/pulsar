@@ -1277,8 +1277,11 @@ public class ManagedCursorImpl implements ManagedCursor {
     public long getEstimatedSizeSinceMarkDeletePosition() {
         Position markDeletePosition = this.markDeletePosition;
         Position lastPosition = ledger.getLastPosition();
-        if (markDeletePosition == null || markDeletePosition.compareTo(lastPosition) >= 0) {
-            if (markDeletePosition == null || !ledger.ledgerExists(lastPosition.getLedgerId())
+        if (markDeletePosition == null || markDeletePosition.compareTo(lastPosition) == 0) {
+            return 0;
+        }
+        if (markDeletePosition.compareTo(lastPosition) > 0) {
+            if (!ledger.ledgerExists(lastPosition.getLedgerId())
                     || isMarkDeletePositionOnEmptyCurrentLedger(markDeletePosition)) {
                 return 0;
             }

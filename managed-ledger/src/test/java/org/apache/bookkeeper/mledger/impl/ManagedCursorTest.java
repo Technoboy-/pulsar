@@ -4187,6 +4187,17 @@ public class ManagedCursorTest extends MockedBookKeeperTestCase {
     }
 
     @Test
+    public void testEstimatedUnackedSizeWhenCursorCaughtUpWithLastPosition() throws Exception {
+        ManagedLedger ledger = factory.open("test_estimated_unacked_size_cursor_caught_up");
+        ManagedCursor cursor = ledger.openCursor("c1");
+
+        Position lastPosition = ledger.addEntry("entry".getBytes(Encoding));
+        cursor.markDelete(lastPosition);
+
+        assertEquals(cursor.getEstimatedSizeSinceMarkDeletePosition(), 0);
+    }
+
+    @Test
     public void testEstimatedUnackedSizeWhenLastPositionLedgerIsNoLongerInLedgerList() {
         ManagedLedgerImpl ledger = mock(ManagedLedgerImpl.class);
         when(ledger.getName()).thenReturn("test_estimated_unacked_size_last_position_ledger_removed");
