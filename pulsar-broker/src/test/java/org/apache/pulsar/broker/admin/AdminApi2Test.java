@@ -28,6 +28,7 @@ import static org.apache.pulsar.common.policies.data.NamespaceIsolationPolicyUnl
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -3491,14 +3492,14 @@ public class AdminApi2Test extends MockedPulsarServiceBaseTest {
         final String namespace = newUniqueName(defaultTenant + "/ns");
         admin.namespaces().createNamespace(namespace, Set.of("test"));
         final String topic = "persistent://" + namespace + "/topic" + UUID.randomUUID();
+        @Cleanup
         Producer<byte[]> producer = pulsarClient.newProducer().topic(topic).create();
         producer.send("message".getBytes());
-        producer.close();
         TopicName topicName = TopicName.get(topic);
         PersistentTopic persistentTopic = (PersistentTopic) pulsar.getBrokerService()
                 .getTopicIfExists(topic).get().get();
         PersistentTopic mockTopic = spy(persistentTopic);
-        org.mockito.Mockito.doReturn(CompletableFuture.completedFuture(null))
+        doReturn(CompletableFuture.completedFuture(null))
                 .when(mockTopic).triggerCompactionWithCheckHasMoreMessages();
         mockTopic.checkCompaction();
         // Disabled by default
