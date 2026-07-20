@@ -44,6 +44,16 @@ public class SchemaInfoTest {
         + "  \"properties\": {}\n"
         + "}";
 
+    private static final String INT32_SCHEMA_INFO_WITH_NULL_PROPERTY = "{\n"
+        + "  \"name\": \"INT32\",\n"
+        + "  \"schema\": \"\",\n"
+        + "  \"type\": \"INT32\",\n"
+        + "  \"timestamp\": 0,\n"
+        + "  \"properties\": {\n"
+        + "    \"key\": null\n"
+        + "  }\n"
+        + "}";
+
     private static final String UTF8_SCHEMA_INFO = "{\n"
         + "  \"name\": \"String\",\n"
         + "  \"schema\": \"\",\n"
@@ -349,8 +359,8 @@ public class SchemaInfoTest {
                     .properties(map)
                     .build();
 
-            // null key will be skipped by Gson when serializing JSON to String
-            JSONAssert.assertEquals(si.toString(), INT32_SCHEMA_INFO, JSONCompareMode.NON_EXTENSIBLE);
+            JSONAssert.assertEquals(si.toString(), INT32_SCHEMA_INFO_WITH_NULL_PROPERTY,
+                    JSONCompareMode.NON_EXTENSIBLE);
         }
     }
 }
